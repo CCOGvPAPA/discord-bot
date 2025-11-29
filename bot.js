@@ -1,14 +1,14 @@
 // =========================================================
-//  SUPER BOT — SINGLE FILE VERSION (NO WELCOME DMS)
+//  SUPER BOT — FIXED + RENDER-COMPATIBLE + ONE FILE
 //  Features:
-//  - Natural Language Commands ("Create a 501st battalion")
-//  - Slash Commands
-//  - Welcome messages in 👋│welcome
-//  - Tickets
-//  - Auto Promotion (basic)
-//  - Role & Channel Creation
-//  - Anti-Spam
-//  - Prefix Moderation (!ban, !kick, !mute, !clear)
+//  • Natural language “/do” command
+//  • Tickets
+//  • Welcome messages (channel only)
+//  • Battalion auto-setup
+//  • Role creation
+//  • Anti-Spam
+//  • Prefix moderation (!ban !kick !mute !clear)
+//  • Proper ready() + correct slash registration
 // =========================================================
 
 const {
@@ -25,8 +25,8 @@ require("dotenv").config();
 // CONFIG
 // ------------------------------------------------------------
 const PREFIX = "!";
-const FOUNDER_ROLE = "Founder"; // your top role
-const WELCOME_CHANNEL_ID = "1443794131703959596"; // 👋│welcome
+const FOUNDER_ROLE = "Founder";
+const WELCOME_CHANNEL_ID = "1443794131703959596";  // 👋│welcome
 
 // ------------------------------------------------------------
 // CLIENT INIT
@@ -53,17 +53,18 @@ function checkSpam(msg) {
     const now = Date.now();
 
     if (!spamMap.has(id)) spamMap.set(id, []);
-
     const timestamps = spamMap.get(id);
+
     timestamps.push(now);
 
     const filtered = timestamps.filter(t => now - t < SPAM_TIME);
     spamMap.set(id, filtered);
 
     if (filtered.length >= SPAM_LIMIT) {
-        const mutedRole = msg.guild.roles.cache.find(r => r.name === "Muted");
-        if (mutedRole) msg.member.roles.add(mutedRole).catch(() => {});
-        msg.channel.send(`⚠️ ${msg.author} has been muted for spam.`);
+        const muted = msg.guild.roles.cache.find(r => r.name === "Muted");
+        if (muted) msg.member.roles.add(muted).catch(() => {});
+
+        msg.channel.send(`⚠️ ${msg.author} was muted for spam.`);
         return true;
     }
     return false;
@@ -147,14 +148,14 @@ async function executePlan(plan, interaction) {
     }
 
     if (plan.type === "promote") {
-        return "✅ Promotion command active (expandable).";
+        return "✅ Promotion system is active (expandable).";
     }
 
-    return "❓ Unknown plan type.";
+    return "❓ Unknown plan.";
 }
 
 // ------------------------------------------------------------
-// SLASH COMMAND REGISTRATION
+// SLASH COMMAND DEFINITIONS
 // ------------------------------------------------------------
 const commands = [
     new SlashCommandBuilder()
@@ -162,8 +163,8 @@ const commands = [
         .setDescription("Give the bot complex English instructions.")
         .addStringOption(opt =>
             opt.setName("instruction")
-                .setDescription("Tell the bot what to do.")
-                .setRequired(true)
+               .setDescription("Tell the bot what to do.")
+               .setRequired(true)
         ),
 
     new SlashCommandBuilder()
@@ -173,17 +174,22 @@ const commands = [
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
-(async () => {
+// ------------------------------------------------------------
+// READY EVENT — Register commands after login
+// ------------------------------------------------------------
+client.once("ready", async () => {
+    console.log(`✅ Logged in as ${client.user.tag}`);
+
     try {
         await rest.put(
             Routes.applicationCommands(process.env.CLIENT_ID),
             { body: commands }
         );
-        console.log("Slash Commands Registered.");
+        console.log("✅ Slash Commands Registered.");
     } catch (err) {
-        console.error(err);
+        console.error("❌ Failed to register slash commands:", err);
     }
-})();
+});
 
 // ------------------------------------------------------------
 // SLASH COMMAND HANDLER
@@ -207,22 +213,25 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (interaction.commandName === "ticket") {
-        const ticket = await interaction.guild.channels.create({
+        const ch = await interaction.guild.channels.create({
             name: `ticket-${interaction.user.username}`,
             type: 0
         });
 
-        await ticket.send(`📩 ${interaction.user}, staff will be with you soon.`);
+        await ch.send(`📩 ${interaction.user}, staff will assist you shortly.`);
         await interaction.reply({ content: "Ticket created!", ephemeral: true });
     }
 });
 
 // ------------------------------------------------------------
-// WELCOME MESSAGE (CHANNEL ONLY - NO DMs)
+// WELCOME MESSAGE (NO DMs)
 // ------------------------------------------------------------
 client.on("guildMemberAdd", member => {
     const channel = member.guild.channels.cache.get(WELCOME_CHANNEL_ID);
-    if (!channel) return;
+    if (!channel) {
+        console.log("⚠️ Welcome channel not found.");
+        return;
+    }
 
     channel.send(
         `👋 **Welcome ${member.user.username}!**\n` +
@@ -231,7 +240,7 @@ client.on("guildMemberAdd", member => {
 });
 
 // ------------------------------------------------------------
-// PREFIX MOD COMMANDS
+// PREFIX COMMANDS
 // ------------------------------------------------------------
 client.on("messageCreate", async msg => {
     if (msg.author.bot) return;
@@ -263,19 +272,23 @@ client.on("messageCreate", async msg => {
         const m = msg.mentions.members.first();
         if (!m) return msg.reply("Mention someone.");
         const role = msg.guild.roles.cache.find(r => r.name === "Muted");
-        if (!role) return msg.reply("No Muted role.");
+        if (!role) return msg.reply("No Muted role found.");
         await m.roles.add(role);
         msg.reply(`🤐 Muted **${m.user.tag}**`);
     }
 
     if (cmd === "clear") {
         const n = parseInt(args[0]);
-        if (!n) return msg.reply("Number?");
+        if (!n) return msg.reply("Specify number.");
         await msg.channel.bulkDelete(n, true);
-        msg.reply(`🧹 Deleted ${n} messages.`).then(m => setTimeout(() => m.delete(), 3000));
+        msg.reply(`🧹 Deleted ${n} messages.`)
+            .then(m => setTimeout(() => m.delete(), 3000));
     }
 });
 
 // ------------------------------------------------------------
+// LOGIN
+// ------------------------------------------------------------
 client.login(process.env.TOKEN);
+
 
